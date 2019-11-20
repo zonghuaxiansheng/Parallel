@@ -1,11 +1,12 @@
 #include <cstring>
 #include <cstdlib>
+#include <unistd.h>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
 #include "mpi.h"
-#include "experiment.h"
+// #include "experiment.h"
 
 namespace ustc_parallel {
 
@@ -15,18 +16,18 @@ namespace ustc_parallel {
 		int color_;
 	};
 
-	void inline gethostname(int my_rank, char* hostname, int len) {
-		char tname[16];
-		int group = my_rank % 3;
-		if (group == 0) {
-			strcpy(tname, "Node0");
-		} else if (group == 1) {
-			strcpy(tname, "Node1");
-		} else {
-			strcpy(tname, "Node2");
-		}
-		strcpy(hostname, tname);
-	}
+	// void inline gethostname(int my_rank, char* hostname, int len) {
+	// 	char tname[16];
+	// 	int group = my_rank % 3;
+	// 	if (group == 0) {
+	// 		strcpy(tname, "Node0");
+	// 	} else if (group == 1) {
+	// 		strcpy(tname, "Node1");
+	// 	} else {
+	// 		strcpy(tname, "Node2");
+	// 	}
+	// 	strcpy(hostname, tname);
+	// }
 
 	void CreatePipeLine(int& my_rank, int& psize, MPI_Comm my_comm) {
 		MPI_Request request_r, request_s;
@@ -108,7 +109,8 @@ namespace ustc_parallel {
 	void CreateSimBcast(int& my_rank, int& psize, MPI_Comm my_comm) {
 	
 		char hostname[16];
-		gethostname(my_rank, hostname, 16);
+		// gethostname(my_rank, hostname, 16);
+		gethostname(hostname, 16);
 
 		char* allname = new char[psize * 16];
 		Node* nodes = new Node[psize];
@@ -120,14 +122,14 @@ namespace ustc_parallel {
 		int color_tag = 10, key_tag = 20;
 
 		if (my_rank == 0) {
-			std::map<std::string, std::pair<int, int>> name_map;
+			std::map<std::string, std::pair<int, int> > name_map;
 			int sub_color = 0;
 			for (int i = 0; i < psize; i++) {
 				char tname[16];
 				strcpy(tname, allname + i * 16);
 				std::string name_str(tname);
 				// std::cout << tname << std::endl;
-				std::map<std::string, std::pair<int, int>>::iterator iter = name_map.find(name_str);
+				std::map<std::string, std::pair<int, int> >::iterator iter = name_map.find(name_str);
 				if (iter != name_map.end()) {
 					nodes[i].color_ = iter->second.first;
 					nodes[i].key_ = ++ iter->second.second;

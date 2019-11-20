@@ -13,10 +13,15 @@ int main(int argc, char* argv[]) {
 	if (my_rank == 0) {
 		std::cout << "Parallel Project by USTC.zonghua !" << std::endl;
 	}
-	
-	// ustc_parallel::CreatePipeLine(my_rank, psize, MPI_COMM_WORLD);
-	// ustc_parallel::CreateSimAlltoAll(my_rank, psize, MPI_COMM_WORLD);
+#ifdef SIM_PIPELINE
+	ustc_parallel::CreatePipeLine(my_rank, psize, MPI_COMM_WORLD);
+#endif
+#ifdef SIM_ALLTOALL
+	ustc_parallel::CreateSimAlltoAll(my_rank, psize, MPI_COMM_WORLD);
+#endif
+#ifdef SIM_BCAST
 	ustc_parallel::CreateSimBcast(my_rank, psize, MPI_COMM_WORLD);
+#endif
 
 	MPI_Finalize();
 
