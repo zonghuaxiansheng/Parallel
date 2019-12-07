@@ -5,6 +5,7 @@
 #include <ctime>
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -212,8 +213,10 @@ namespace ustc_parallel {
 		std::ifstream ifile;
 		ifile.open(mname, std::ios::in);
 		if (!ifile.is_open()) {
-			std::cout << "* Open file failed!" << std::endl;
+			std::cerr << "* Open file failed!" << std::endl;
 			exit(1);
+		} else {
+			std::cout << "* Open file " << mname << std::endl;
 		}
 		auto& mptr = *(mptr_);
 		for (int i = 0; i < matrix_size; i++) {
@@ -318,16 +321,16 @@ namespace ustc_parallel {
 		int matrix_size = 500;
 		CreateLuMatrix<int>(&L, &U, &A, matrix_size);
 
-		if (my_rank == 0) {
-			DumpMatrix<int>(&L, "Matrix_L", matrix_size);
-			DumpMatrix<int>(&U, "Matrix_U", matrix_size);
-			DumpMatrix<int>(&A, "Matrix_A", matrix_size);
-			PrintMatrix<int>(L, "L", matrix_size);
-			PrintMatrix<int>(U, "U", matrix_size);
-			PrintMatrix<int>(A, "A", matrix_size);
-		}
-		MPI_Barrier(my_comm);
-		for (int i = 1; i < psize; i++) {
+		// if (my_rank == 0) {
+		// 	DumpMatrix<int>(&L, "Matrix_L", matrix_size);
+		// 	DumpMatrix<int>(&U, "Matrix_U", matrix_size);
+		// 	DumpMatrix<int>(&A, "Matrix_A", matrix_size);
+		// 	PrintMatrix<int>(L, "L", matrix_size);
+		// 	PrintMatrix<int>(U, "U", matrix_size);
+		// 	PrintMatrix<int>(A, "A", matrix_size);
+		// }
+		// MPI_Barrier(my_comm);
+		for (int i = 0; i < psize; i++) {
 			if (my_rank == i) {
 				LoadMatrix<int>(&L, "Matrix_L", matrix_size);
 				LoadMatrix<int>(&U, "Matrix_U", matrix_size);
@@ -407,7 +410,7 @@ namespace ustc_parallel {
 	// 1. Sum
 	// 1.1. Dish
 	void CreateDishSum(int& my_rank, int& psize, MPI_Comm my_comm) {
-
+		
 		auto& n = psize;
 		int* sumArray = new int[n];
 
@@ -508,9 +511,18 @@ namespace ustc_parallel {
 		}
 	}
 
+	template<typename T>
+	void SubMatrixMult(T& aptr, T& bptr, int matrix_size) {}
+
+	template<typedef T>
+	void CreateFoxMatrix(T& aptr, T& bptr, int matrix_size) {}
+
 	// 2. FOX Matrix Multiple
 	void CreateFoxMatrixMult(int& my_rank, int& psize, MPI_Comm my_comm) {
 		// TODO(zonghua) FOX
+
+		CreateFoxMatrix();
+
 	}
 
 	// 3. Parameter Server
@@ -533,10 +545,11 @@ namespace ustc_parallel {
 				int dest = my_rank % pServerNum;
 				MPI_Status status;
 				MPI_Request request;
-				int stime = rand() % 1000 + 2000;
 #ifdef WINDOWS_PLATFORM
+				int stime = rand() % 1000 + 2000;
 				Sleep(stime);
 #else
+				int stime = rand() % 10;
 				sleep(stime);
 #endif // WINDOWS_PLATFROM
 				std::cout << "* wServer " << my_rank << " Send to " << dest << " sData " << sdata << std::endl;
@@ -580,10 +593,11 @@ namespace ustc_parallel {
 				}
 				MPI_Bcast(&avgData, 1, MPI_INT, 0, param_comm);
 				std::cout << "* pServer " << my_rank << " Get avg data " << avgData << std::endl;
-				int stime = rand() % 1000 + 2000;
 #ifdef WINDOWS_PLATFORM
+				int stime = rand() % 1000 + 2000;
 				Sleep(stime);
 #else
+				int stime = rand() % 10;
 				sleep(stime);
 #endif // WINDOWS_PLATFROM
 				for (int i = 1; i <= rNum; i++) {
@@ -662,9 +676,9 @@ namespace ustc_parallel {
 	}
 
 	bool PrimeJudge(int& n) {
-		int sqrt_n = sqrt(n);
-		// int sqrt_n = n;
-		for (int i = 2; i <= sqrt_n; i ++) {
+		// int sqrt_n = sqrt(n);
+		int sqrt_n = n;
+		for (int i = 2; i < sqrt_n; i ++) {
 			if (n % i == 0) {
 				return false;
 			}
@@ -687,8 +701,9 @@ namespace ustc_parallel {
 		}
 		clock_t end_t = clock();
 
-		std::cout << "* PJ use time: " << (end_t - start_t) << "s" << std::endl;
-
+		// std::cout << "* PJ use time: " << (end_t - start_t) << "s" << std::endl;
+		std::cerr << "1<PJ>Prime-size:" << pj_vec.size() << std::endl;
+		std::cerr << "1<PJ>Avg-time-use(s):" << (end_t - start_t) << std::endl;
 		start_t = clock();
 		for (int i = 5; i < floor_n; i += 2) {
 			int log_i = ceil(log(i));
@@ -699,62 +714,71 @@ namespace ustc_parallel {
 		}
 		end_t = clock();
 
-		std::cout << "* MR use time: " << (end_t - start_t) << "s" << std::endl;
+		// std::cout << "* MR use time: " << (end_t - start_t) << "s" << std::endl;
 
 		if (pj_vec.size() != mr_vec.size()) {
 			std::cout << "* There is some difference" << std::endl;
 		}
+
+		std::cerr << "1<MC>Prime-size:" << mr_vec.size() << std::endl;
+		std::cerr << "1<MC>Avg-time-use(s):" << (end_t - start_t) << std::endl;
 	}
 
 	void CreateMonteCarloParallel(int& my_rank, int& psize, MPI_Comm my_comm) {
 
-		typedef unsigned char bool_t;
+		typedef char bool_t;
 
 		int floor_n = 100000000;
+		int pn = ceil((float)(floor_n / 2) / (float)psize);
+		int sum_pn = pn * psize;
 
-		bool_t* prime_arr = new bool_t[floor_n / 2];
-		prime_arr[0] = true;	// 2
-		prime_arr[1] = true;	// 3
+		bool_t* prime_arr = new bool_t[pn];
 
 		srand(time(NULL));
 
 		clock_t start_t = clock();
-		for (int i = 5; i < floor_n; i += 2) {
+		for (int i = 5 + my_rank * 2; i < floor_n; i += (psize * 2)) {
 			int log_i = ceil(log(i));
-			int self_i = floor((float)log_i / (float)psize);
-			prime_arr[i / 2] = (bool_t)RepeatMillerRabin(i, self_i);
+			prime_arr[(i - 5) / (psize * 2)] = RepeatMillerRabin(i, log_i) ? '1' : '0';
 		}
-		clock_t end_t = clock();
 		
-		std::cout << "* MR " << my_rank << " use time: " << (end_t - start_t) << "s" << std::endl;
-
-		bool_t* prime_sum_arr = new bool_t[(floor_n / 2) * psize];;
-		/*if (my_rank == 0) {
-			std::cout << "* Root new memory Start !" << std::endl;
-			prime_sum_arr = new int[(floor_n / 2) * psize];
-			std::cout << "* Root new memory Done !" << std::endl;
-		}*/
+		bool_t* prime_sum_arr = new bool_t[sum_pn];
+		MPI_Gather(prime_arr, pn, MPI_CHAR, prime_sum_arr, pn, MPI_CHAR, 0, my_comm);
 		
-		MPI_Gather(prime_arr, floor_n / 2, MPI_UNSIGNED_CHAR,
-				prime_sum_arr, floor_n / 2, MPI_UNSIGNED_CHAR, 0, my_comm);
-
+		std::vector<int> prime_vec;
 		if (my_rank == 0) {
-			std::vector<int> prime_vec;
-
-			for (int i = 0; i < floor_n / 2; i++) {
-				bool is_prime = true;
-				for (int p = 0; p < psize; p++) {
-					if (!(int)prime_sum_arr[p * (floor_n / 2) + i]) {
-						is_prime = false;
+			prime_vec.push_back(2);
+			prime_vec.push_back(3);
+			for (int p = 0; p < psize; p ++) {
+				for (int i = 0; i < pn; i ++) {
+					if (prime_sum_arr[p * pn + i] == '1') {
+						prime_vec.push_back(5 + (p * 2) + (i * psize * 2));
 					}
 				}
-				if (is_prime) {
-					prime_vec.push_back((i == 0) ? 2 : (i * 2 + 1));
-				}
 			}
-			std::cout << "* " << __func__
-				<< " prime size " << prime_vec.size() << std::endl;
 		}
-		
+		clock_t end_t = clock();
+
+		int use_t = (int)(end_t - start_t);
+		// std::cout << "* MR " << my_rank << " use time: " << use_t << "s" << std::endl;
+		int* time_sum_arr = new int[psize];
+		MPI_Gather(&use_t, 1, MPI_INT, time_sum_arr, 1, MPI_INT, 0, my_comm);
+		if (my_rank == 0) {
+			int time_sum = 0;
+			for (int p = 0; p < psize; p ++) {
+				time_sum += time_sum_arr[p];
+			}
+			// std::sort(prime_vec.begin(), prime_vec.end(), [] (int x, int y) {return x < y;});
+			// std::cout << "* Prime array: ";
+			// for (auto iter = prime_vec.begin(); iter != prime_vec.end(); iter ++) {
+			// 	std::cout << *iter << ",";
+			// }
+			// std::cout << std::endl;
+			std::cerr << psize << ">Prime-size:" << prime_vec.size() << std::endl;
+			std::cerr << psize << ">Avg-time-use(s):" << (float)time_sum / (float)psize << std::endl;
+		}
+
+		delete [] prime_arr;
+		delete [] prime_sum_arr;
 	}
 }
