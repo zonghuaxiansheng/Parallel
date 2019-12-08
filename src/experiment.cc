@@ -420,48 +420,53 @@ namespace ustc_parallel {
 			check_sum += i;
 		}
 
+		clock_t start_t = clock();
 		// Step
 		for (int s = 0; pow(2, s + 1) <= n; s ++) {
 			int barrier = pow(2, s);
 			int group = pow(2, s + 1);
-			for (int i = 0; i < n; i++) {
-				if (my_rank == i) {
-					auto index = i % group;
-					if (index < barrier) {
-						int dest = my_rank + barrier;
-						MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
-					}
-					else {
-						int dest = my_rank - barrier;
-						MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
-					}
-				}
+
+			auto index = my_rank % group;
+			if (index < barrier) {
+				int dest = my_rank + barrier;
+				MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
 			}
-			for (int i = 0; i < n; i++) {
-				if (my_rank == i) {
-					auto index = i % group;
-					MPI_Status status;
-					if (index < barrier) {
-						int dest = my_rank + barrier;
-						MPI_Recv(&sumArray[dest], 1, MPI_INT, dest, s, my_comm, &status);
-						sumArray[my_rank] += sumArray[dest];
-					}
-					else {
-						int dest = my_rank - barrier;
-						MPI_Recv(&sumArray[dest], 1, MPI_INT, dest, s, my_comm, &status);
-						sumArray[my_rank] += sumArray[dest];
-					}
-				}
+			else {
+				int dest = my_rank - barrier;
+				MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
 			}
-			MPI_Barrier(my_comm);
+			// MPI_Barrier(my_comm);
+			MPI_Status status;
+			if (index < barrier) {
+				int dest = my_rank + barrier;
+				MPI_Recv(&sumArray[dest], 1, MPI_INT, dest, s, my_comm, &status);
+				sumArray[my_rank] += sumArray[dest];
+			}
+			else {
+				int dest = my_rank - barrier;
+				MPI_Recv(&sumArray[dest], 1, MPI_INT, dest, s, my_comm, &status);
+				sumArray[my_rank] += sumArray[dest];
+			}
+			// MPI_Barrier(my_comm);
+		}
+		clock_t end_t = clock();
+		int use_t = (end_t - start_t);
+		int* use_time_arr = new int[psize];
+		MPI_Gather(&use_t, 1, MPI_INT, use_time_arr, 1, MPI_INT, 0, my_comm);
+
+		if (my_rank == 0) {
+			float mpi_sum_t = 0.0;
+			for (int i = 0; i < psize; i ++) {
+				mpi_sum_t += use_time_arr[i];
+			}
+			mpi_sum_t = mpi_sum_t / (float)psize;
+			std::cerr << n << "\t" << mpi_sum_t << std::endl;
 		}
 
 		for (int i = 0; i < n; i++) {
 			if (my_rank == i ) {
-				if (sumArray[i] == check_sum) {
-					std::cout << "* Rank: " << my_rank << " Sum: " << sumArray[my_rank] << std::endl;
-				} else {
-					std::cerr << "* Rank: " << my_rank << " Sum Check failed !" << std::endl;
+				if (sumArray[i] != check_sum) {
+					std::cout << "* Rank: " << my_rank << " Sum Check failed !" << std::endl;
 				}
 			}
 		}

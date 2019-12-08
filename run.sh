@@ -24,7 +24,10 @@ then
 	scp ./$1 pp11@node3:/home/pp11/SA19011136/.experiment/Parallel/
 	scp ./$1 pp11@node4:/home/pp11/SA19011136/.experiment/Parallel/
 	echo "Run sim_dishsum ..."
-	mpirun -np 32 -f mpi_config ./$1
+	for ((i = 2; i < 256; i *= 2));
+	do
+		mpirun -np $i -f mpi_config ./$1 2>> dishsum_parallel_out.txt
+	done
 elif [ $1 == "sim_btreesum" ]
 then
 	echo "Copy sim_btreesum to node3 & node4 ..."
