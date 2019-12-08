@@ -10,6 +10,7 @@ namespace ustc_parallel {
 
 	void CreateDishSum(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateBinaryTreeSum(int& my_rank, int& psize, MPI_Comm my_comm);
+	void CreateFoxMatrixMult(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateParameterServer(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateMonteCarloSingle(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateMonteCarloParallel(int& my_rank, int& psize, MPI_Comm my_comm);

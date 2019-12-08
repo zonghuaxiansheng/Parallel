@@ -32,6 +32,13 @@ then
 	scp ./$1 pp11@node4:/home/pp11/SA19011136/.experiment/Parallel/
 	echo "Run sim_btreesum ..."
 	mpirun -np 32 -f mpi_config ./$1
+elif [ $1 == "sim_foxmult" ]
+then
+	echo "Copy sim_foxmult to node3 & node4 ..."
+	scp ./$1 pp11@node3:/home/pp11/SA19011136/.experiment/Parallel/
+	scp ./$1 pp11@node4:/home/pp11/SA19011136/.experiment/Parallel/
+	echo "Run sim_foxmult ..."
+	mpirun -np 36 -f mpi_config ./$1 2>> fox_parallel_out
 elif [ $1 == "sim_pserver" ]
 then
 	echo "Copy sim_pserver to node3 & node4 ..."

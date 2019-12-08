@@ -33,6 +33,9 @@ int main(int argc, char* argv[]) {
 #ifdef SIM_BTREESUM
 	ustc_parallel::CreateBinaryTreeSum(my_rank, psize, MPI_COMM_WORLD);
 #endif
+#ifdef SIM_FOXMULT
+	ustc_parallel::CreateFoxMatrixMult(my_rank, psize, MPI_COMM_WORLD);
+#endif
 #ifdef SIM_PSERVER
 	ustc_parallel::CreateParameterServer(my_rank, psize, MPI_COMM_WORLD);
 #endif

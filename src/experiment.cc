@@ -539,9 +539,9 @@ namespace ustc_parallel {
 	}
 
 	template<typename T>
-	void MatrixPrint(T*** X, int matrix_size) {
+	void MatrixPrint(T*** X, std::string name, int matrix_size) {
 		auto& xptr = *(X);
-		std::cout << "* MatrixPrint :" << std::endl;
+		std::cout << "* MatrixPrint " << name << std::endl;
 		for (int i = 0; i < matrix_size; i ++) {
 			for (int j = 0; j < matrix_size; j ++) {
 				std::cout << xptr[i][j] << " ";
@@ -551,7 +551,22 @@ namespace ustc_parallel {
 		std::cout << std::endl;
 	}
 
-	typedef<typename T>
+	template<typename T>
+	void MatrixCompare(T*** X, T*** Y, int matrix_size) {
+		auto& xptr = *(X);
+		auto& yptr = *(Y);
+		for (int i = 0; i < matrix_size; i ++) {
+			for (int j = 0; j < matrix_size; j ++) {
+				if (xptr[i][j] != yptr[i][j]) {
+					std::cout << "* Matrix compare failed with " 
+							  << xptr[i][j] << "," << yptr[i][j] << std::endl;
+				}
+				
+			}
+		}
+	}
+
+	template<typename T>
 	void MatrixCopy(int copy_type,
 					T*** X,
 					T*** Y,
@@ -560,22 +575,24 @@ namespace ustc_parallel {
 					int start_xc = 0,
 					int start_yr = 0,
 					int start_yc = 0) {
+		auto& xptr = *(X);
+		auto& yptr = *(Y);
 		if (copy_type) { // from X to Y (X > Y)
 			for (int i = start_xr; i < start_xr + length; i ++) {
 				for (int j = start_xc; j < start_xc + length; j ++) {
-					Y[i - start_xr + start_yr][j - start_xc + start_yc] = X[i][j];
+					yptr[i - start_xr + start_yr][j - start_xc + start_yc] = xptr[i][j];
 				}
 			}
 		} else {	// from Y to X (X > Y)
 			for (int i = start_yr; i < start_yr + length; i ++) {
 				for (int j = start_yc; j < start_yc + length; j ++) {
-					X[i - start_yr + start_xr][j - start_yc + start_xc] = Y[i][j];
+					xptr[i - start_yr + start_xr][j - start_yc + start_xc] = yptr[i][j];
 				}
 			}
 		}
 	}
 
-	template<typedef T>
+	template<typename T>
 	void CreateFoxMatrix(T*** A, int matrix_size, int init_type=1) {
 		auto& aptr = *(A);
 		aptr = new T* [matrix_size];
@@ -587,12 +604,11 @@ namespace ustc_parallel {
 				} else {
 					aptr[i][j] = 0;
 				}
-				
 			}
 		}
 	}
 
-	template<typedef T>
+	template<typename T>
 	void ReleaseFoxMatrix(T*** A, int matrix_size) {
 		auto& aptr = *(A);
 		for (int i = 0; i < matrix_size; i ++) {
@@ -602,22 +618,45 @@ namespace ustc_parallel {
 	}
 
 	// 2. FOX Matrix Multiple
+
+	void CreateFoxMatrixSingle(int& my_rank, int& psize, MPI_Comm my_comm, int matrix_size) {
+		int** A = nullptr;
+		int** B = nullptr;
+		int** C = nullptr;
+		srand(0);
+		CreateFoxMatrix<int>(&A, matrix_size);
+		CreateFoxMatrix<int>(&B, matrix_size);
+		CreateFoxMatrix<int>(&C, matrix_size, 0);
+		MatrixPrint<int>(&A, "A", matrix_size);
+		MatrixPrint<int>(&B, "B", matrix_size);
+		MatrixMult<int>(&A, &B, &C, matrix_size);
+		MatrixPrint<int>(&C, "Normal-C", matrix_size);
+		ReleaseFoxMatrix<int>(&A, matrix_size);
+		ReleaseFoxMatrix<int>(&B, matrix_size);
+		ReleaseFoxMatrix<int>(&C, matrix_size);
+	}
+
 	void CreateFoxMatrixMult(int& my_rank, int& psize, MPI_Comm my_comm) {
-		// TODO(zonghua) FOX
 		int** A = nullptr;
 		int** B = nullptr;
 		int** C = nullptr;
 		int** MA = nullptr;
 		int** MB = nullptr;
-		int sub_matrix_size = 2;
-		int matrix_size = sub_matrix_size * sqrt(psize);
+		int sub_matrix_size = 256;
+		int sqrt_size = (int)sqrt(psize);
+		int matrix_size = sub_matrix_size * sqrt_size;
+		srand(0);
 		CreateFoxMatrix<int>(&A, matrix_size);
 		CreateFoxMatrix<int>(&B, matrix_size);
+		if (my_rank == 0) {
+			MatrixPrint<int>(&A, "A", matrix_size);
+			MatrixPrint<int>(&B, "B", matrix_size);
+		}
 		CreateFoxMatrix<int>(&C, matrix_size, 0);
 		CreateFoxMatrix<int>(&MA, sub_matrix_size);
 		CreateFoxMatrix<int>(&MB, sub_matrix_size);
-		int row = (int)(my_rank / sqrt(psize));
-		int col = (int)(my_rank % sqrt(psize));
+		int row = (int)(my_rank / sqrt_size);
+		int col = (int)(my_rank % sqrt_size);
 		MPI_Comm row_comm;
 		MPI_Comm col_comm;
 		MPI_Comm_split(my_comm, row, col, &row_comm);
@@ -638,68 +677,109 @@ namespace ustc_parallel {
 		int** MultC = nullptr;
 		CreateFoxMatrix<int>(&CopyMA, sub_matrix_size);
 		CreateFoxMatrix<int>(&MultC, sub_matrix_size);
+		MPI_Barrier(my_comm);
+		clock_t start_t = clock();
 		// Fox multiple
-		for (int i = 0; i < sqrt(psize); i ++) {
-			if (i == col) {
-				MatrixCopy<int>(1,
-								&MA,
-								&CopyMA,
-								sub_matrix_size);
-			}
+		for (int i = 0; i < sqrt_size; i ++) {
+			MatrixCopy<int>(1,
+							&MA,
+							&CopyMA,
+							sub_matrix_size);
 			for (int j = 0; j < sub_matrix_size; j ++) {
-				MPI_Bcast(&CopyMA[j], sub_matrix_size, MPI_INT, i, row_comm);
+				MPI_Bcast(CopyMA[j], sub_matrix_size, MPI_INT, (i + row) % sqrt_size, row_comm);
 			}
 			MatrixMult<int>(&CopyMA, &MB, &MultC, sub_matrix_size);
 			MatrixAdd<int>(&C, &MultC, &C, sub_matrix_size);
+			// Shift MB
+			MPI_Barrier(col_comm);
 			for (int j = 0; j < sub_matrix_size; j ++) {
 				MPI_Request request_s, request_r;
 				MPI_Status status;
-				int dest = (row == 0) ? sqrt(psize) - 1 : row - 1;
-				int src = (row == (sqrt(psize) - 1)) ? 0 : src + 1;
-				MPI_Isend(MB[j], sub_matrix_size, MPI_INT, dest, row, col_comm, &request_s);
+				int dest = (row == 0) ? sqrt_size - 1 : row - 1;
+				int src = (row == (sqrt_size - 1)) ? 0 : row + 1;
+				MPI_Isend(MB[j], sub_matrix_size, MPI_INT, dest, dest, col_comm, &request_s);
 				MPI_Irecv(MB[j], sub_matrix_size, MPI_INT, src, row, col_comm, &request_r);
 				MPI_Wait(&request_s, &status);
 				MPI_Wait(&request_r, &status);
 			}
 		}
+		// MPI_Barrier(my_comm);
+		// for (int i = 0; i < psize; i ++) {
+		// 	MPI_Barrier(my_comm);
+		// 	if (i == my_rank) {
+		// 		std::string matrix_str("OutC_" + std::to_string(my_rank));
+		// 		MatrixPrint<int>(&C, matrix_str, sub_matrix_size);
+		// 	}
+			
+		// }
 		// Collect matrix C
 		if (my_rank != 0) {
-			// std::vector<MPI_Request> req_vec;
+			std::vector<MPI_Request> req_vec;
 			for (int j = 0; j < sub_matrix_size; j ++) {
 				MPI_Request request;
-				MPI_Isend(&C[j], sub_matrix_size, MPI_INT, 0, my_rank, my_comm, &request);
-				// req_vec.push_back(request);
-				MPI_Wait(&request, &status);
+				// MPI_Status status;
+				MPI_Isend(C[j], sub_matrix_size, MPI_INT, 0, my_rank, my_comm, &request);
+				req_vec.push_back(request);
+				// MPI_Wait(&request, &status);
 			}
-			// MPI_Status status;
-			// for(auto& iter = req_vec.begin(); iter != req_vec.end(); iter ++) {
-			// 	MPI_Wait(&(*iter), &status);
-			// }
+			MPI_Status status;
+			for(auto iter = req_vec.begin(); iter != req_vec.end(); iter ++) {
+				MPI_Wait(&(*iter), &status);
+			}
 		} else {
-			// std::vector<MPI_Request> req_vec;
-			for (int i = 0; i < psize; i ++) {
-				int row = (int)(i / sqrt(psize));
-				int col = (int)(i % sqrt(psize));
+			std::vector<MPI_Request> req_vec;
+			for (int i = 1; i < psize; i ++) {
+				int row = (int)(i / sqrt_size);
+				int col = (int)(i % sqrt_size);
 				for (int j = 0; j < sub_matrix_size; j ++) {
 					MPI_Request request;
+					// MPI_Status status;
 					MPI_Irecv(&C[row * sub_matrix_size + j][col * sub_matrix_size],
 							 sub_matrix_size, MPI_INT, i, i, my_comm, &request);
-					MPI_Wait(&request, &status);
-					// req_vec.push_back(request);
+					// MPI_Wait(&request, &status);
+					req_vec.push_back(request);
 				}	
 			}
-			// MPI_Status status;
-			// for(auto iter = req_vec.begin(); iter != req_vec.end(); iter ++) {
-			// 	MPI_Wait(&(*iter), &status);
-			// }
+			MPI_Status status;
+			for(auto iter = req_vec.begin(); iter != req_vec.end(); iter ++) {
+				MPI_Wait(&(*iter), &status);
+			}
 		}
+		clock_t end_t = clock();
+
+		int use_t = (end_t - start_t);
+		int* use_time_arr = new int[psize];
+		MPI_Gather(&use_t, 1, MPI_INT, use_time_arr, 1, MPI_INT, 0, my_comm);
 
 		if (my_rank == 0) {
-			MatrixPrint<int>(&C, matrix_size);
-			MatrixMult<int>(&A, &B, &C, matrix_size);
-			MatrixPrint<int>(&C, matrix_size);
+			float mpi_sum_t = 0.0;
+			for (int i = 0; i < psize; i ++) {
+				mpi_sum_t += use_time_arr[i];
+			}
+			mpi_sum_t = mpi_sum_t / (float)psize;
+			// MatrixPrint<int>(&C, "MPI-Fox-C", matrix_size);
+
+			// Normal fox multpile
+			int** NC = nullptr;
+			CreateFoxMatrix<int>(&NC, matrix_size, 0);
+			start_t = clock();
+			MatrixMult<int>(&A, &B, &NC, matrix_size);
+			end_t = clock();
+			use_t = (end_t - start_t);
+			MatrixCompare(&C, &NC, matrix_size);
+			// MatrixPrint<int>(&NC, "Normal-Fox-C", matrix_size);
+			std::cerr << matrix_size << "-" << sub_matrix_size << "-MPI-Fox-Avg-Time: " << mpi_sum_t << std::endl
+					  << matrix_size << "-" << sub_matrix_size << "-Normal-Fox-Time: " << use_t << std::endl;
 		}
 
+		ReleaseFoxMatrix<int>(&A, matrix_size);
+		ReleaseFoxMatrix<int>(&B, matrix_size);
+		ReleaseFoxMatrix<int>(&C, matrix_size);
+		ReleaseFoxMatrix<int>(&MA, sub_matrix_size);
+		ReleaseFoxMatrix<int>(&MB, sub_matrix_size);
+		ReleaseFoxMatrix<int>(&CopyMA, sub_matrix_size);
+		ReleaseFoxMatrix<int>(&MultC, sub_matrix_size);
+		delete [] use_time_arr;
 	}
 
 	// 3. Parameter Server
