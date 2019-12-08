@@ -488,22 +488,21 @@ namespace ustc_parallel {
 			int div = pow(2, s + 1);
 			int sub = pow(2, s);
 			
-			for (int i = 0; i < n; i++) {
-				if (my_rank == i && (i % sub) == 0) {
-					if ((i % div) != 0) {
-						int dest = my_rank - sub;
-						std::cout << "* Rank " << my_rank << " Send to " << dest << std::endl;
-						MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
-					} else {
-						int src = my_rank + sub;
-						MPI_Status status;
-						MPI_Recv(&sumArray[src], 1, MPI_INT, src, s, my_comm, &status);
-						sumArray[my_rank] += sumArray[src];
-						std::cout << "* Rank " << my_rank << " Recv from " << src << std::endl;
-					}
+			if ((my_rank % sub) == 0) {
+				if ((my_rank % div) != 0) {
+					int dest = my_rank - sub;
+					// std::cout << "* Rank " << my_rank << " Send to " << dest << std::endl;
+					MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
+				} else {
+					int src = my_rank + sub;
+					MPI_Status status;
+					MPI_Recv(&sumArray[src], 1, MPI_INT, src, s, my_comm, &status);
+					sumArray[my_rank] += sumArray[src];
+					// std::cout << "* Rank " << my_rank << " Recv from " << src << std::endl;
 				}
 			}
-			MPI_Barrier(my_comm);
+
+			// MPI_Barrier(my_comm);
 		}
 		MPI_Bcast(&sumArray[0], 1, MPI_INT, 0, my_comm);
 		clock_t end_t = clock();
@@ -519,7 +518,7 @@ namespace ustc_parallel {
 			mpi_sum_t = mpi_sum_t / (float)psize;
 			std::cerr << n << "\t" << mpi_sum_t << std::endl;
 		}
-		
+
 		if (sumArray[0] != check_sum) {
 			std::cout << "* Rank: " << my_rank << " Sum Check failed !" << std::endl;
 		}
