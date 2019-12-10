@@ -491,18 +491,14 @@ namespace ustc_parallel {
 			if ((my_rank % sub) == 0) {
 				if ((my_rank % div) != 0) {
 					int dest = my_rank - sub;
-					// std::cout << "* Rank " << my_rank << " Send to " << dest << std::endl;
 					MPI_Send(&sumArray[my_rank], 1, MPI_INT, dest, s, my_comm);
 				} else {
 					int src = my_rank + sub;
 					MPI_Status status;
 					MPI_Recv(&sumArray[src], 1, MPI_INT, src, s, my_comm, &status);
 					sumArray[my_rank] += sumArray[src];
-					// std::cout << "* Rank " << my_rank << " Recv from " << src << std::endl;
 				}
 			}
-
-			// MPI_Barrier(my_comm);
 		}
 		MPI_Bcast(&sumArray[0], 1, MPI_INT, 0, my_comm);
 		clock_t end_t = clock();
@@ -522,7 +518,6 @@ namespace ustc_parallel {
 		if (sumArray[0] != check_sum) {
 			std::cout << "* Rank: " << my_rank << " Sum Check failed !" << std::endl;
 		}
-
 	}
 
 	template<typename T>
@@ -717,15 +712,6 @@ namespace ustc_parallel {
 				MPI_Wait(&request_r, &status);
 			}
 		}
-		// MPI_Barrier(my_comm);
-		// for (int i = 0; i < psize; i ++) {
-		// 	MPI_Barrier(my_comm);
-		// 	if (i == my_rank) {
-		// 		std::string matrix_str("OutC_" + std::to_string(my_rank));
-		// 		MatrixPrint<int>(&C, matrix_str, sub_matrix_size);
-		// 	}
-			
-		// }
 		// Collect matrix C
 		if (my_rank != 0) {
 			std::vector<MPI_Request> req_vec;
@@ -907,22 +893,28 @@ namespace ustc_parallel {
 	}
 
 	// 4. MC Algorithm
-	bool Btest(int& a, int& n) {
+	bool Btest(int& a, int& n, bool debug=false) {
 		auto s = 0;
 		auto t = n - 1;
 		while (t % 2 == 0) {
 			s ++;
 			t = t / 2;
 		}
-		// std::cout << "* n,a,t,s=" << n << "," << a << "," << t << "," << s << std::endl;
+		if (debug) {
+			std::cout << "* n,a,t,s=" << n << "," << a << "," << t << "," << s << std::endl;
+		}
 		auto x = FastMod(a, t, n);
-		// std::cout << "* x=" << x << std::endl;
+		if (debug) {
+			std::cout << "* x=" << x << std::endl;
+		}
 		if (x == 1 || x == n - 1) {
 			return true;
 		}
 		for (int i = 1; i < s; i ++) {
 			x = FastMod(x, 2, n);
-			// std::cout << "* x=" << x << std::endl;
+			if (debug) {
+				std::cout << "* x=" << x << std::endl;
+			}
 			if (x == n - 1) {
 				return true;
 			}
@@ -930,16 +922,16 @@ namespace ustc_parallel {
 		return false;
 	}
 
-	bool MillerRabin(int& n) {
+	bool MillerRabin(int& n, bool debug=false) {
 		int a = rand() % ( n - 3) + 2;
 		// std::cout << "* Rand choose: " << a << std::endl;
-		return Btest(a, n);
+		return Btest(a, n, debug);
 	}
 
-	bool RepeatMillerRabin(int& n, int& repeat_num) {
+	bool RepeatMillerRabin(int& n, int& repeat_num, bool debug=false) {
 		// std::cout << "* MR: n,r=" << n << "," << repeat_num << std::endl;
 		for (int i = 0; i < repeat_num; i ++) {
-			if (!MillerRabin(n)) {
+			if (!MillerRabin(n, debug)) {
 				return false;
 			}
 		}
@@ -947,9 +939,9 @@ namespace ustc_parallel {
 	}
 
 	bool PrimeJudge(int& n) {
-		// int sqrt_n = sqrt(n);
-		int sqrt_n = n;
-		for (int i = 2; i < sqrt_n; i ++) {
+		int sqrt_n = sqrt(n);
+		// int sqrt_n = n;
+		for (int i = 2; i <= sqrt_n; i ++) {
 			if (n % i == 0) {
 				return false;
 			}
@@ -958,7 +950,7 @@ namespace ustc_parallel {
 	}
 
 	void CreateMonteCarloSingle(int& my_rank, int& psize, MPI_Comm my_comm) {
-		int floor_n = 100000000;
+		int floor_n = 100000;
 		std::vector<int> pj_vec;
 		std::vector<int> mr_vec;
 
@@ -978,10 +970,14 @@ namespace ustc_parallel {
 		start_t = clock();
 		for (int i = 5; i < floor_n; i += 2) {
 			int log_i = ceil(log(i));
+			log_i = (int)ceil(sqrt(log_i));
 			// int log_i = 10;
 			if (RepeatMillerRabin(i, log_i)) {
 				mr_vec.push_back(i);
 			}
+			// } else if (RepeatMillerRabin(i, log_i)) {
+			// 	mr_vec.push_back(i);
+			// }
 		}
 		end_t = clock();
 
@@ -990,6 +986,20 @@ namespace ustc_parallel {
 		if (pj_vec.size() != mr_vec.size()) {
 			std::cout << "* There is some difference" << std::endl;
 		}
+		// int j = 0;
+		// int diff_cnt = 0;
+		// for (int i = 0; i < pj_vec.size(); i ++) {
+		// 	if (pj_vec[i] != mr_vec[j]) {
+		// 		std::cout << "* Different " << pj_vec[i] << "," << mr_vec[j] << std::endl;
+		// 		int log_i = ceil(log(pj_vec[i]));
+		// 		RepeatMillerRabin(pj_vec[i], log_i, true);
+		// 		diff_cnt ++;
+		// 		// break;
+		// 	} else {
+		// 		j ++;
+		// 	}
+		// 	if (diff_cnt > 5) break;
+		// }
 
 		std::cerr << "1<MC>Prime-size:" << mr_vec.size() << std::endl;
 		std::cerr << "1<MC>Avg-time-use(s):" << (end_t - start_t) << std::endl;
