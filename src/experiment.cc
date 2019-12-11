@@ -1062,4 +1062,208 @@ namespace ustc_parallel {
 		delete [] prime_arr;
 		delete [] prime_sum_arr;
 	}
+
+	// 15.1
+	template<typename T>
+	void CreateTCMatrix(T*** A, int row_size, int col_size) {
+		auto& aptr = *(A);
+		aptr = new T* [row_size];
+		for (int i = 0; i < row_size; i ++) {
+			aptr[i] = new T [col_size];
+			for (int j = 0; j < col_size; j ++) {
+				if (i != j) {
+					int tmp = rand() % 10;
+					aptr[i][j] = tmp / 8;
+				} else {
+					aptr[i][j] = 1;
+				}
+			}
+		}
+	}
+
+	template<typename T>
+	void MatrixCopy(T*** A, T*** B, int row_size, int col_size) {
+		auto& aptr = *(A);
+		auto& bptr = *(B);
+		for (int r = 0; r < row_size; r ++) {
+			for (int c = 0; c < col_size; c ++) {
+				bptr[r][c] = aptr[r][c];
+			}
+		}
+	}
+
+	template<typename T>
+	void RunTransitiveClosureSerial(T*** A, T*** M, int matrix_size) {
+		auto& aptr = *(A);
+		auto& mptr = *(M);
+		for (int k = 1; k <= log(matrix_size); k ++) {
+			for (int i = 0; i < matrix_size; i ++) {
+				for (int j = 0; j < matrix_size; j ++) {
+					int s = 0;
+					while (s < matrix_size && (aptr[i][s] == 0 || aptr[s][j] == 0)) {
+						s ++;
+					}
+					if (s < matrix_size) {
+						mptr[i][j] = 1;
+					} else {
+						mptr[i][j] = 0;
+					}
+				}
+			}
+			for (int i = 0; i < matrix_size; i ++) {
+				for (int j = 0; j < matrix_size; j ++) {
+					aptr[i][j] = mptr[i][j];
+				}
+			}
+			// MatrixPrint<int>(&aptr, "Loop-A", matrix_size);
+		}
+	}
+
+	void CreateTransitiveClosureParallel(int& my_rank, int& psize, MPI_Comm my_comm) {
+
+		int** SA = nullptr;
+		int** PA = nullptr;
+		int** M = nullptr;
+		int sub_matrix_size = 128;
+		int matrix_size = sub_matrix_size * psize;
+		srand(time(NULL));
+		CreateTCMatrix<int>(&SA, matrix_size, matrix_size);
+		CreateTCMatrix<int>(&PA, matrix_size, matrix_size);
+		MatrixCopy<int>(&SA, &PA, matrix_size, matrix_size);
+		CreateTCMatrix<int>(&M, matrix_size, matrix_size);
+		int serial_use_t = 0;
+		int parallel_use_t = 0;
+		if (my_rank == 0) {
+			// MatrixPrint<int>(&SA, "Initial-A", matrix_size);
+			clock_t start_t = clock();
+			RunTransitiveClosureSerial<int>(&SA, &M, matrix_size);
+			clock_t end_t = clock();
+			serial_use_t = (end_t - start_t);
+			// MatrixPrint<int>(&SA, "Serial-A", matrix_size);
+		}
+		int** LocalA = nullptr;
+		int** LocalB = nullptr;
+		int** TmpB = nullptr;
+		int row_size = matrix_size / psize;
+		int col_size = row_size;
+		if (matrix_size % psize != 0) {
+			std::cout << "* Unsupport matrix_size % psize != 0 now !" << std::endl;
+		}
+
+		CreateTCMatrix<int>(&LocalA, row_size, matrix_size);
+		CreateTCMatrix<int>(&LocalB, matrix_size, col_size);
+		CreateTCMatrix<int>(&TmpB, matrix_size, col_size);
+
+		clock_t start_t = clock();
+		for (int i = 1; i <= log(matrix_size); i ++) {
+			// 1. Root send sub_rows and sub_cols to each processor
+			if (my_rank == 0) {
+				for (int p = 1; p < psize; p ++) {
+					for (int r = 0; r < row_size; r ++) {
+						MPI_Send(PA[p * row_size + r], matrix_size, MPI_INT, p, p, my_comm);
+					}
+					for (int r = 0; r < matrix_size; r ++) {
+						MPI_Send(&PA[r][p * col_size], col_size, MPI_INT, p, p + psize, my_comm);
+					}
+				}
+				for (int r = 0; r < row_size; r ++) {
+					for (int c = 0; c < matrix_size; c ++) {
+						LocalA[r][c] = PA[r][c];
+					}
+				}
+				for (int r = 0; r < matrix_size; r ++) {
+					for (int c = 0; c < col_size; c ++) {
+						LocalB[r][c] = PA[r][c];
+					}
+				}
+			} else {
+				MPI_Status status;
+				for (int r = 0; r < row_size; r ++) {
+					MPI_Recv(LocalA[r], matrix_size, MPI_INT, 0, my_rank, my_comm, &status);
+				}
+				for (int r = 0; r < matrix_size; r ++) {
+					MPI_Recv(LocalB[r], col_size, MPI_INT, 0, my_rank + psize, my_comm, &status);
+				}
+			}
+			// 2. Start compute for each processor
+			for (int j = 0; j < psize; j ++) {
+				for (int r = 0; r < row_size; r ++) {
+					for (int c = 0; c < col_size; c ++) {
+						int s = 0;
+						while (s < matrix_size && (LocalA[r][s] == 0 || LocalB[s][c] == 0)) {
+							s ++;
+						}
+						int start_col = (my_rank + j) % psize;
+						M[my_rank * row_size + r][start_col * col_size + c] = (s < matrix_size) ? 1 : 0;
+					}
+				}
+				// MPI_Barrier(my_comm);
+				// Shift LocalB
+				MatrixCopy<int>(&LocalB, &TmpB, matrix_size, col_size);
+				for (int r = 0; r < matrix_size; r ++) {
+					int src = (my_rank + 1) % psize;
+					int dest = (my_rank == 0) ? psize - 1 : (my_rank - 1);
+					MPI_Request request_s, request_r;
+					MPI_Status status;
+					MPI_Isend(TmpB[r], col_size, MPI_INT, dest, my_rank, my_comm, &request_s);
+					MPI_Irecv(LocalB[r], col_size, MPI_INT, src, src, my_comm, &request_r);
+					MPI_Wait(&request_s, &status);
+					MPI_Wait(&request_r, &status);
+					// MPI_Status status;
+					// MatrixCopy<int>(&LocalB, &TmpB, matrix_size, col_size);
+					// if (my_rank == 0) {
+					// 	MPI_Recv(LocalB[r], col_size, MPI_INT, src, src, my_comm, &status);
+					// 	MPI_Send(TmpB[r], col_size, MPI_INT, dest, my_rank, my_comm);
+					// } else {
+					// 	MPI_Send(TmpB[r], col_size, MPI_INT, dest, my_rank, my_comm);
+					// 	MPI_Recv(LocalB[r], col_size, MPI_INT, src, src, my_comm, &status);
+					// }	
+				}
+			}
+			// 3. Collect compute output
+			if (my_rank != 0) {
+				// Send sub_rows to root
+				for (int r = 0; r < row_size; r ++) {
+					MPI_Send(M[my_rank * row_size + r], matrix_size, MPI_INT, 0, my_rank, my_comm);
+				}
+			} else {
+				// Recv sub_rows from other processors
+				for (int p = 1; p < psize; p ++) {
+					for (int r = 0; r < row_size; r ++) {
+						MPI_Status status;
+						MPI_Recv(M[p * row_size + r], matrix_size, MPI_INT, p, p, my_comm, &status);
+					}	
+				}
+			}
+			// 4. Copy M to A
+			if (my_rank == 0) {
+				for (int i = 0; i < matrix_size; i ++) {
+					for (int j = 0; j < matrix_size; j ++) {
+						PA[i][j] = M[i][j];
+					}
+				}
+			}
+		}
+		clock_t end_t = clock();
+		// Root show matrix A
+		if (my_rank == 0) {
+			// MatrixPrint<int>(&PA, "Parallel-A", matrix_size);
+			MatrixCompare<int>(&SA, &PA, matrix_size);
+		}
+		// Compute use time
+		parallel_use_t = (end_t - start_t);
+		int* use_time_arr = new int[psize];
+		MPI_Gather(&parallel_use_t, 1, MPI_INT, use_time_arr, 1, MPI_INT, 0, my_comm);
+		if (my_rank == 0) {
+			float mpi_sum_t = 0.0;
+			for (int i = 0; i < psize; i ++) {
+				mpi_sum_t += use_time_arr[i];
+			}
+			mpi_sum_t = mpi_sum_t / (float)psize;
+			std::cerr << psize << "\t" << sub_matrix_size << "\t" << serial_use_t << "\t" << mpi_sum_t << std::endl;
+		}
+	}
+
+	// 19.1
+	
 }

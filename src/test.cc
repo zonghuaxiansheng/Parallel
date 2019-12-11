@@ -45,6 +45,9 @@ int main(int argc, char* argv[]) {
 #ifdef SIM_MC_PARALLEL
 	ustc_parallel::CreateMonteCarloParallel(my_rank, psize, MPI_COMM_WORLD);
 #endif
+#ifdef SIM_TC_PARALLEL
+	ustc_parallel::CreateTransitiveClosureParallel(my_rank, psize, MPI_COMM_WORLD);
+#endif
 
 	MPI_Finalize();
 

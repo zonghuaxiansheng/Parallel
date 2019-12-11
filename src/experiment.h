@@ -14,6 +14,7 @@ namespace ustc_parallel {
 	void CreateParameterServer(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateMonteCarloSingle(int& my_rank, int& psize, MPI_Comm my_comm);
 	void CreateMonteCarloParallel(int& my_rank, int& psize, MPI_Comm my_comm);
+	void CreateTransitiveClosureParallel(int& my_rank, int& psize, MPI_Comm my_comm);
 }
 
 #endif // !_USTC_EXPERIMENT_H_

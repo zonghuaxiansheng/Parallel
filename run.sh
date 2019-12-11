@@ -66,6 +66,14 @@ then
 	scp ./$1 pp11@node4:/home/pp11/SA19011136/.experiment/Parallel/
 	echo "Run sim_mc_parallel ..."
 	mpirun -np 160 -f mpi_config ./$1 2>> mc_parallel_out
+elif [ $1 == "sim_tc_parallel" ]
+then
+	echo "Copy sim_tc_parallel to node3 & node4 ..."
+	# scp ./$1 pp11@node3:/home/pp11/SA19011136/.experiment/Parallel/
+	# scp ./$1 pp11@node4:/home/pp11/SA19011136/.experiment/Parallel/
+	echo "Run sim_tc_parallel ..."
+	# mpirun -np 2 -f mpi_config ./$1 2>> tc_parallel_out.txt
+	mpirun -np 16 ./$1 2>> tc_parallel_out.txt
 elif [ $1 == "sim_alltoall" ]
 then
 	mpirun -np 4 ./sim_alltoall
