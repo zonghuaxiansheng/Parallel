@@ -11,4 +11,10 @@
 
 # mpic++ -g -Wall -std=c++11 src/*.cc -o sim_foxmult -fopenmp -DSIM_FOXMULT
 
-mpic++ -g -Wall -std=c++11 src/*.cc -o sim_tc_parallel -fopenmp -DSIM_TC_PARALLEL
+# mpic++ -g -Wall -std=c++11 src/*.cc -o sim_tc_parallel -fopenmp -DSIM_TC_PARALLEL
+
+# mpic++ -g -Wall -std=c++11 src/*.cc -o sim_gse_parallel -fopenmp -DSIM_GSE_PARALLEL
+
+# mpic++ -g -Wall -std=c++11 src/*.cc -o sim_fft_parallel -fopenmp -DSIM_FFT_PARALLEL
+
+mpic++ -g -Wall -std=c++11 src/fft.cc -o sim_fft_parallel -fopenmp

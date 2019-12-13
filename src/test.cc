@@ -48,6 +48,12 @@ int main(int argc, char* argv[]) {
 #ifdef SIM_TC_PARALLEL
 	ustc_parallel::CreateTransitiveClosureParallel(my_rank, psize, MPI_COMM_WORLD);
 #endif
+#ifdef SIM_GSE_PARALLEL
+	ustc_parallel::CreateGaussEliminParallel(my_rank, psize, MPI_COMM_WORLD);
+#endif
+#ifdef SIM_FFT_PARALLEL
+	ustc_parallel::CreateFftParallel(my_rank, psize, MPI_COMM_WORLD);
+#endif
 
 	MPI_Finalize();
 
