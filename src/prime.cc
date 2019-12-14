@@ -20,7 +20,6 @@ namespace ustc_parallel {
 
 double sstart_t = 0.0, send_t = 0.0, pstart_t = 0.0, pend_t = 0.0, trans_t = 0.0;
 
-
 void CreatePrimeParallel(int& n, int& my_rank, int& psize, MPI_Comm my_comm) {
 
     typedef char bool_t;
@@ -30,21 +29,21 @@ void CreatePrimeParallel(int& n, int& my_rank, int& psize, MPI_Comm my_comm) {
 
     if (my_rank == 0) {
         sstart_t = MPI_Wtime();
-        prime_svec.push_back(2);
-        prime_svec.push_back(3);
-        for (int i = 5; i < n; i += 2) {
-            int sqrt_n = sqrt(i);
-            int is_prime = true;
-            for (int j = 2; j <= sqrt_n; j ++) {
-                if (i % j == 0) {
-                    is_prime = false;
-                    break;
-                }
-            }
-            if (is_prime) {
-                prime_svec.push_back(i);
-            }
-        }
+        // prime_svec.push_back(2);
+        // prime_svec.push_back(3);
+        // for (int i = 5; i < n; i += 2) {
+        //     int sqrt_n = sqrt(i);
+        //     int is_prime = true;
+        //     for (int j = 2; j <= sqrt_n; j ++) {
+        //         if (i % j == 0) {
+        //             is_prime = false;
+        //             break;
+        //         }
+        //     }
+        //     if (is_prime) {
+        //         prime_svec.push_back(i);
+        //     }
+        // }
         send_t = MPI_Wtime();
     }
     MPI_Barrier(my_comm);
@@ -55,11 +54,8 @@ void CreatePrimeParallel(int& n, int& my_rank, int& psize, MPI_Comm my_comm) {
     // OMP
     #pragma omp parallel shared(num_threads)
     {
+        num_threads = omp_get_num_threads();
         int my_id = omp_get_thread_num();
-        if (my_id == 0) {
-            num_threads = omp_get_num_threads();
-            // std::cout << "* threads_num:" << num_threads << std::endl;
-        }
         int sub_m = m / num_threads;
         #pragma omp parallel for
         for (int i = 0; i < sub_m ; i ++) {

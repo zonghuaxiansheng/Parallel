@@ -1,5 +1,7 @@
-all: closure gauss fft
+all: closure gauss fft prime lusplit
 
+lusplit: src/utils.h src/lusplit.cc
+	mpic++ -g -Wall -std=c++11 src/lusplit.cc -o sim_lusplit_parallel -fopenmp
 prime: src/utils.h src/prime.cc
 	mpic++ -g -Wall -std=c++11 src/prime.cc -o sim_prime_parallel -fopenmp
 closure: src/utils.h src/closure.cc

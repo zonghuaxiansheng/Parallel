@@ -11,6 +11,7 @@
 #include <vector>
 #include <map>
 #include "mpi.h"
+#include "omp.h"
 #include "utils.h"
 
 namespace ustc_parallel {
@@ -75,6 +76,7 @@ void CreateTransitiveClosureParallel(int& n, int& my_rank, int& psize, MPI_Comm 
     CreateMatrix<int>(&LocalB, matrix_size, col_size);
     CreateMatrix<int>(&TmpB, matrix_size, col_size);
 
+    int num_threads = 1;
     pstart_t = MPI_Wtime();
     for (int i = 1; i <= log(matrix_size); i ++) {
         // 1. Root send sub_rows and sub_cols to each processor
@@ -126,16 +128,31 @@ void CreateTransitiveClosureParallel(int& n, int& my_rank, int& psize, MPI_Comm 
         }
         // 2. Start compute for each processor
         for (int j = 0; j < psize; j ++) {
-            for (int r = 0; r < row_size; r ++) {
-                for (int c = 0; c < col_size; c ++) {
-                    int s = 0;
-                    while (s < matrix_size && (LocalA[r][s] == 0 || LocalB[s][c] == 0)) {
-                        s ++;
+            #pragma omp parallel shared(num_threads)
+            {
+                num_threads = omp_get_num_threads();
+                int my_id = omp_get_thread_num();
+                if (my_id == 0) {
+                    if (num_threads > row_size) {
+                        std::cout << "* OMP Threads Num > Row Size !" << std::endl;
+                    } else if (row_size % num_threads != 0) {
+                        std::cout << "* OMP Threads Num Can't Mod Row Size !" << std::endl;
                     }
-                    int start_col = (my_rank + j) % psize;
-                    M[my_rank * row_size + r][start_col * col_size + c] = (s < matrix_size) ? 1 : 0;
+                }
+                int sub_row_size = row_size / num_threads;
+                #pragma omp parallel for
+                for (int r = 0; r < sub_row_size; r ++) {
+                    for (int c = 0; c < col_size; c ++) {
+                        int s = 0;
+                        while (s < matrix_size && (LocalA[my_id * sub_row_size + r][s] == 0 || LocalB[s][c] == 0)) {
+                            s ++;
+                        }
+                        int start_col = (my_rank + j) % psize;
+                        M[my_rank * row_size + my_id * sub_row_size + r][start_col * col_size + c] = (s < matrix_size) ? 1 : 0;
+                    }
                 }
             }
+
             // Shift LocalB
             std::vector<MPI_Request> req_vec_r;
             std::vector<MPI_Request> req_vec_s;
@@ -192,7 +209,7 @@ void CreateTransitiveClosureParallel(int& n, int& my_rank, int& psize, MPI_Comm 
     if (my_rank == 0) {
         // MatrixPrint<int>(&PA, "Parallel-A", matrix_size);
         MatrixCompare<int>(&SA, &PA, matrix_size);
-        std::cerr << n << "\t" << psize << "\t" << (send_t - sstart_t) << "\t" 
+        std::cerr << n << "\t" << psize << "\t" << num_threads << "\t" << (send_t - sstart_t) << "\t" 
             << (pend_t - pstart_t) << "\t" << trans_t << "\t" << (pend_t - pstart_t - trans_t) << std::endl;
     }
 
